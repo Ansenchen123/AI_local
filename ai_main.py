@@ -7,7 +7,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import scrolledtext,simpledialog
 from PIL import Image, ImageTk
 
 def load_api_key():
@@ -33,13 +33,19 @@ def change_history_to_json(history):
         })
     return history_json
 
-def save_conversation(history, filename="conversation.json"):
+def save_conversation(history, filename="conversation"):
+    if not filename.endswith(".json"):
+        filename += ".json"
+    filename =  os.path.join("history",filename)
     history = change_history_to_json(history)
     with open(filename, 'w') as f:
         json.dump(history, f, indent=4)
     print(f"Conversation saved to {filename}")
 
-def read_json_history(filename="conversation.json"):
+def read_json_history(filename="conversation"):
+    if not filename.endswith(".json"):
+        filename += ".json"
+    filename =  os.path.join("history",filename)
     try:
         with open(filename, 'r') as f:
             history_json = json.load(f)
@@ -53,19 +59,26 @@ def read_json_history(filename="conversation.json"):
         for entry in history_json
     ]
 
-def tkinter_thread(model):
-    q = queue.Queue()
+def set_history(chat,filename):
+    history = read_json_history(filename)
+    chat.history=history
+    
+def find_history():
+    return os.listdir("history")
 
-    def run_chat_btn_t():
+def tkinter_thread(chat):
+    q = queue.Queue()
+    filename = os.listdir('history')[0]
+    def run_chat_btn_t(event=None):
         prompt = text_area.get()
         if prompt:
             chat_btn.config(text='wait',state="disabled")
+            msnscroll.insert(tk.END,f"user:{prompt}\n")
             threading.Thread(target=run_chat_btn,args=(prompt,)).start()
 
     def run_chat_btn(prompt):
         try:
-            response_text, history = chat_with_model(model, prompt)
-            response = [response_text,history]
+            response = chat_with_model(chat, prompt) 
             q.put(response)
         except:
             q.put(None)
@@ -74,32 +87,85 @@ def tkinter_thread(model):
         try:
             response= q.get_nowait()
             if response is None:
-                msn.config(text=f"AI Error")
+                msnscroll.insert(tk.END, "AI Error\n")
             else:
-                msn.config(text=f"AI Response: {response[0]}")
-                text_area.delete(0,tk.END)
+                response_text = response[0]
+                response_history = response[1]
+                msnscroll.insert(tk.END,f"model:{response_text}\n")
+                save_conversation(response_history,filename)
+                text_area.delete(0, tk.END)
             chat_btn.config(text='send',state="normal")
         except queue.Empty:
             pass
         finally:
             root.after(100,check_queue)
+
+    def history_text(history):
+        msnscroll.delete('1.0',tk.END)
+        for entry in history:
+            role = entry.role
+            text = entry.parts[0].text
+            if role == 'model':
+                msnscroll.insert(tk.END,f"model:{text}\n")
+            elif role == 'user':
+                msnscroll.insert(tk.END,f"user:{text}\n")
+    
+    def set_btn_list():
+        model_choice.delete(0, tk.END)
+        for text in find_history():
+            btn = text.split('.')
+            model_choice.insert(tk.END,btn[0])
+
+    def on_history_choice(event):
+        nonlocal filename
+        widget = event.widget
+        select = widget.curselection()
+        if not select:
+            return
+        index = select[0]
+        value = widget.get(index)
+        save_conversation(chat.history,filename)
+        filename = value
+        msn.config(text=filename)
+        if not value.endswith('.json'):
+            value += '.json'
+        set_history(chat,value)
+        history_text(chat.history)
+
+
+    def add_chat():
+        filename_input = simpledialog.askstring(
+            title='filecreat',
+            prompt='new file name'
+        )
+        if filename_input:
+            nonlocal filename
+            filename = filename_input
+            msn.config(text=filename)
+            chat.history = []
+            history_text(chat.history)
+            save_conversation(chat.history,filename)
+            set_btn_list()
+
+        
     root = tk.Tk()
     root.title("AI Chat Interface")
     root.geometry("600x400")
 
     label = tk.Label(root, text="Enter your message:",anchor="w")
     label.place(
-        relx=0.5,
+        relx=0.35,
         rely=0.8,
-        relwidth=0.5,
+        relwidth=0.65,
         relheight=0.1,
     )
 
     text_area = tk.Entry(root, width=70)
+    text_area.bind("<Return>", run_chat_btn_t)
     text_area.place(
-        relx=0.5,
+        relx=0.35,
         rely=0.9,
-        relwidth=0.4,
+        relwidth=0.55,
         relheight=0.1,
     )
 
@@ -111,11 +177,43 @@ def tkinter_thread(model):
         relheight=0.1,
     )
 
-    msn = tk.Label(root, text="AI Chat Interface", font=("Arial", 16))
-    msn.pack()
+    msnscroll = scrolledtext.ScrolledText()
+    msnscroll.place(
+        relx=0.35,
+        rely=0.1,
+        relwidth=0.65,
+        relheight=0.8,
+    )
+
+    model_choice = tk.Listbox(root)
+    model_choice.place(
+        relx=0.0,
+        rely=0.2,
+        relwidth=0.33,
+        relheight=0.8,
+    )
+
+    add_chat_btn = tk.Button(root,text="add file",command=add_chat)
+    add_chat_btn.place(
+        relx=0.0,
+        rely=0.1,
+        relwidth=0.33,
+        relheight=0.1,
+    )
+
+    msn = tk.Label(root, text=filename, font=("Arial", 16))
+    msn.place(
+        relx=0.3,
+        rely=0.0,
+        relwidth=0.6,
+        relheight=0.1,
+    )
 
     root.after(100,check_queue)
-
+    set_btn_list()
+    set_history(chat,filename)
+    history_text(chat.history)
+    model_choice.bind('<<ListboxSelect>>', on_history_choice)
     return root
 
 
@@ -125,7 +223,6 @@ def main():
     chat = create_model()
     #response_text, history = chat_with_model(chat, "Hello, how can I assist you today?")
     #print("Model Response:", response_text)
-
     root = tkinter_thread(chat)
     root.mainloop()
 
