@@ -7,7 +7,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 
 import tkinter as tk
-from tkinter import scrolledtext,simpledialog
+from tkinter import scrolledtext,simpledialog,messagebox
 from PIL import Image, ImageTk
 
 def load_api_key():
@@ -60,15 +60,23 @@ def read_json_history(filename="conversation"):
     ]
 
 def set_history(chat,filename):
+    if not filename.endswith('.json'):
+            filename += '.json'
     history = read_json_history(filename)
     chat.history=history
     
 def find_history():
     return os.listdir("history")
 
+def delete_file(filename):
+    if not filename.endswith('.json'):
+            filename += '.json'
+    path = os.path.join("history",filename)
+    os.remove(path)
+
 def tkinter_thread(chat):
     q = queue.Queue()
-    filename = os.listdir('history')[0]
+    filename = os.listdir('history')[0].split('.')[0]
     def run_chat_btn_t(event=None):
         prompt = text_area.get()
         if prompt:
@@ -127,8 +135,6 @@ def tkinter_thread(chat):
         save_conversation(chat.history,filename)
         filename = value
         msn.config(text=filename)
-        if not value.endswith('.json'):
-            value += '.json'
         set_history(chat,value)
         history_text(chat.history)
 
@@ -136,7 +142,7 @@ def tkinter_thread(chat):
     def add_chat():
         filename_input = simpledialog.askstring(
             title='filecreat',
-            prompt='new file name'
+            prompt='new filename:'
         )
         if filename_input:
             nonlocal filename
@@ -146,6 +152,36 @@ def tkinter_thread(chat):
             history_text(chat.history)
             save_conversation(chat.history,filename)
             set_btn_list()
+
+    def del_chat():
+        filename_input = simpledialog.askstring(
+            title='filedelete',
+            prompt='del filename:'
+        )
+        if filename_input:
+            nonlocal filename
+            file_list = find_history()
+            if not filename_input.endswith('.json'):
+                filename_input += '.json'
+
+            if not(filename_input in file_list):
+                messagebox.showinfo(
+                    title="Error", 
+                    message="file no found "
+                )
+            elif len(file_list) <= 1:
+                messagebox.showinfo(
+                    title="Error", 
+                    message="you must need 1 chat"
+                )
+            else:      
+                delete_file(filename_input)
+                if filename == filename_input:
+                    filename = find_history()[0]
+                    chat.history = read_json_history(filename)
+                    msn.config(text=filename.split('.')[0])
+                    history_text(chat.history)
+                set_btn_list()
 
         
     root = tk.Tk()
@@ -195,12 +231,20 @@ def tkinter_thread(chat):
 
     add_chat_btn = tk.Button(root,text="add file",command=add_chat)
     add_chat_btn.place(
-        relx=0.0,
-        rely=0.1,
-        relwidth=0.33,
-        relheight=0.1,
+        relx=0.065,
+        rely=0.025,
+        relwidth=0.2,
+        relheight=0.05,
     )
 
+    del_chat_btn = tk.Button(root,text="delete file",command=del_chat)
+    del_chat_btn.place(
+        relx=0.065,
+        rely=0.125,
+        relwidth=0.2,
+        relheight=0.05,
+    )
+    
     msn = tk.Label(root, text=filename, font=("Arial", 16))
     msn.place(
         relx=0.3,
