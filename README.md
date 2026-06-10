@@ -62,7 +62,7 @@ python localAI.py
 - `.env.example`: sample configuration for Gemini and OpenAI-compatible local inference settings.
 - `.gitignore`: excludes local environment files, virtual environments, cache files, and generated history outputs.
 
-## 繁體中文摘要
+## 摘要
 
 AI Local 收錄兩個本機 AI 實驗用 Python 程式。
 `ai_main.py` 是使用 Gemini 的 Tkinter 桌面聊天介面，會把對話紀錄存成 JSON 檔。
